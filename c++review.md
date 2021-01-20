@@ -82,8 +82,7 @@ int main(){
 }
 ```
 
-
-You can run the above code [here](https://repl.it/@hfarhat/lvalue-rvalue-references).
+You can run the above code [here](https://godbolt.org/z/e8v8cx).
 Since C++11 there is a new type of references called **rvalue** references.
 The variable _res_ above extends the lifetime of the temporary object created by the ByT() function.  To see that consider when the destructor is called in the following code
 
@@ -107,7 +106,7 @@ std::cout<<" done\n";
 
 }
 ```
-You can run the above code [here](https://repl.it/@hfarhat/lvalue-rvalue-reference2)
+You can run the above code [here](https://godbolt.org/z/4EacM3)
 Note that  when when an rvalue reference  is used, it is used as a lvalue reference. This is called **move semantics is not passed through** .For the example the following recursive function gives an error
 
 ```cpp
@@ -133,6 +132,7 @@ unless the compiler performs return value optimization (rvo) the following occur
 (in g++ or clang++ specify -fno-elide-constructors to skip optimization)
 
 ```cpp
+#include <iostream>
 struct Test {
         Test(){
           std::cout<<"ctor\n";
@@ -158,6 +158,8 @@ what happens is the following
 1. t in main is copy ctored from the tmp
 1. tmp is destroyed
 1. when main exists t is destroyed
+
+You can test the code below [here](https://godbolt.org/z/9Y4ojx). **Note** the -fno-elide-constructors option in the bottom right of the screen.
 ```cpp
 $g++-10 -fno-elide-constructors -std=c++11 rvopt.cpp
 $./a.out
@@ -167,6 +169,9 @@ dtor
 copy ctor
 dtor
 dtor
+
+```
+If we remove the -fno-elide-constructors you get this output. Try it [here](https://godbolt.org/z/73bPvr)
 $g++-10 -std=c++20 rvopt.cpp
 $./a.out
 ctor
@@ -174,7 +179,7 @@ dtor
 ```
 
 ## Pointers
-A pointer variable is a variable that holds and address. We say variable _p_ points to variable _x_ if _p_ holds the address of _x_: ```int *p=&x;```.
+A pointer variable is a variable that holds an address. We say variable _p_ points to variable _x_ if _p_ holds the address of _x_: ```int *p=&x;```.
 
 ```cpp
 int main(){
@@ -197,6 +202,85 @@ int main(){
     delete p;//release the reserved memory;
 }
 ```
+The **new** operator can be used with any object.
+```
+#include <iostream>
+class Test {
+int _x,_y;
+public:
+ Test(int x,int y):_x(x),_y(y){}
+ int& getX(){return _x;}
+ int& getY(){return _y;}
+};
+int main(){
+    Test* t=new Test(13,18);
+    t->getX()=3;
+    t->getY()=7;
+    std::cout<<++t->getX()<<"\n";
+    std::cout<<++t->getY()<<"\n";
+}
+
+```
+You can try the above code [here](https://godbolt.org/z/zMach4)
+
+### new, malloc, operator new
+
+A __new__ expression is used both for dynamically allocating memory(on the heap) __and__ calling the constructor of an object. The function __operator new__ allocates memory __only__. In that sense it is similar to malloc in C. Unless you are designing your own container you __almost never__ need to use __operator new__. Usually it is used to _place_ the constructed object at a _preallocated_ place.
+Example
+
+```
+#include <iostream>
+#include <new>
+struct Test {
+ int _x,_y;
+ Test(int x,int y):_x(x),_y(y){std::cout<<"ctor\n";}
+ ~Test(){std::cout<<"dtor\n";}
+};
+int main(){
+void* p=operator new(sizeof(Test));
+std::cout<<"finished allocating memory\n";
+Test* t=new (p) Test{1,2};
+delete t;
+}
+```
+You can run the code [here](https://godbolt.org/z/faYq3Y).
+
+We can override the implementation of __operator new__ and __operator delete__. As can be seen below new and delete are the C++ "versions" of C malloc and free.
+```
+#include <iostream>
+class Test {
+int _x,_y;
+public:
+ Test(int x,int y):_x(x),_y(y){std::cout<<"ctor\n";}
+ int& getX(){return _x;}
+ int& getY(){return _y;}
+ ~Test(){std::cout<<"dtor\n";}
+};
+
+void * operator new(std::size_t size){
+   std::cout<<"allocating size ="<<size<<" \n";
+   void *p=malloc(size);
+   return p;
+
+}
+void operator delete(void *p) noexcept {
+    std::cout<<"freeing memory\n";
+    free(p);
+}
+int main(){
+    Test *t=new (Test){1,2};
+    delete t;
+    Test *p=new Test{3,4};
+    p->~Test();
+    operator delete(p);
+  
+  
+}
+
+
+```
+https://godbolt.org/z/orqKPq
+
 ## Templates
 
 On many occasions we write multiple versions of the same code to handle different types. For example suppose we want to write a function to add two numbers (using the + operator) we write
