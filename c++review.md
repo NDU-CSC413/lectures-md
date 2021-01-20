@@ -160,7 +160,7 @@ what happens is the following
 1. when main exists t is destroyed
 
 You can test the code below [here](https://godbolt.org/z/9Y4ojx). **Note** the -fno-elide-constructors option in the bottom right of the screen.
-```cpp
+```
 $g++-10 -fno-elide-constructors -std=c++11 rvopt.cpp
 $./a.out
 ctor
@@ -172,6 +172,7 @@ dtor
 
 ```
 If we remove the -fno-elide-constructors you get this output. Try it [here](https://godbolt.org/z/73bPvr)
+```
 $g++-10 -std=c++20 rvopt.cpp
 $./a.out
 ctor
@@ -203,7 +204,8 @@ int main(){
 }
 ```
 The **new** operator can be used with any object.
-```
+
+```cpp
 #include <iostream>
 class Test {
 int _x,_y;
@@ -228,7 +230,7 @@ You can try the above code [here](https://godbolt.org/z/zMach4)
 A __new__ expression is used both for dynamically allocating memory(on the heap) __and__ calling the constructor of an object. The function __operator new__ allocates memory __only__. In that sense it is similar to malloc in C. Unless you are designing your own container you __almost never__ need to use __operator new__. Usually it is used to _place_ the constructed object at a _preallocated_ place.
 Example
 
-```
+```cpp
 #include <iostream>
 #include <new>
 struct Test {
@@ -246,7 +248,8 @@ delete t;
 You can run the code [here](https://godbolt.org/z/faYq3Y).
 
 We can override the implementation of __operator new__ and __operator delete__. As can be seen below new and delete are the C++ "versions" of C malloc and free.
-```
+
+```cpp
 #include <iostream>
 class Test {
 int _x,_y;
