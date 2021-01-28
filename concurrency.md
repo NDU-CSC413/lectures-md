@@ -4,6 +4,8 @@
 
 # Multithreading in  C++
 Starting with the C++11 standard, C++ provides support for writing _portable_ multitheaded applications without relying on additional libraries and extensions. The basic functions and classes for thread support are declared in the ```<thread>``` header. We introduce threads with the ubiquitous hello thread program.
+# Creating threads
+
 Starting a new thead in C++ is done by constructing a new ```std::thread``` object. Thread execution begins __immediately__ after the ```thread``` object is constructed. A simple example,
 
 ```cpp
@@ -54,7 +56,7 @@ int main()
 }
 ```
 As you can see we use ```detach()``` instead of ```join()```. Therefore the calling thread (in this case main) does not wait for the thread ```t```. But when the main thread exists all other threads are destroyed. Therefore the created thread might not have enough time to perform its job. You can see these two cases by defining and undefining  __WAIT__ in the code.
-
+# Handling exceptions
 We close this section by considering the case when an __exception__ is thrown before a thread is joined. Consider the following code
 
 ```cpp
@@ -86,7 +88,92 @@ As you can see the statement ```std::cout<<"main thread is done\n"``` is never r
 In the above example, ```t.join()``` is never reached because ```myf()``` throws an exception. Therefore  ```t.~thread()``` calls ```std::terminate()```.
 One way to guard against such a situation to use the _Resource acquisition is initialization_ (RAII) technique. We will see more of this technique when we study mutexes and locks but for now it is sufficient to say that we construct an object wrapper around the thread so that it automatically calls ```join()``` when it is destroyed.
 
-## Function Objects and Lambdas
+In the code below we define a class ```thread_guard``` that __automatically__ calls ```join``` when its destructor is called. Since the destructor is called when the object goes out of scope this guarantees that the created thread will be joined even when the scope that created the thread takes an unexpected flow due to exceptions.
+
+```cpp
+#include <iostream>
+#include <exception>
+#include <thread>
+void threadf() {}
+void throwf() {
+    std::cout << "starting throwf\n";
+    throw std::exception{  };
+}
+struct thread_guard {
+    std::thread& _t;
+
+    thread_guard(std::thread& t) :_t(t) { }
+    ~thread_guard() {
+        if(_t.joinable())
+            _t.join();
+        std::cout << "thread guard dtor\n";
+    }
+};
+void runt() {
+    std::thread t(threadf);
+    thread_guard g(t);
+    throwf();
+}
+int main()
+{
+    try {
+        runt();
+    }
+    catch (std::exception & e) {
+        std::cout<<e.what()<<"\n";
+    }
+    std::cout << "main thread is done\n";
+}
+```
+You can try the above code [here](https://godbolt.org/z/8MG91T)
+
+Our solution __does not__ guard against the case when an exception occurs __inside__ the thread code. In the previous example if the thread _t_ runs function ```throwf``` instead of ```threadf``` our thread_guard solution does not work. This is because exceptions __are not__ transferred between threads so we need to handle it locally. One solution is to provide an exception safe wrapper as in the example below.
+
+```cpp
+#include <iostream>
+#include <exception>
+#include <thread>
+void threadf() {}
+void throwf() {
+    std::cout << "starting throwf\n";
+    throw std::exception{  };
+}
+struct thread_guard {
+    std::thread& _t;
+
+    thread_guard(std::thread& t) :_t(t) { }
+    ~thread_guard() {
+        if(_t.joinable())
+            _t.join();
+        std::cout << "thread guard dtor\n";
+    }
+};
+void runt() {
+    std::thread t(throwf);
+    thread_guard g(t);
+    throwf();
+}
+template<typename F>
+void wrapper(F f){
+   try{
+       f();
+   }
+   catch(...){}
+}
+int main()
+{
+    std::thread t(wrapper<void (*)()>,throwf);
+    t.join();
+    std::cout << "main thread is done\n";
+}
+```
+You can try the code [here](https://godbolt.org/z/Gqbvvj).
+
+In this case the compiler can not automatically deduce the template parameter type ```F``` because we are calling ```wrapper``` indirectly inside a thread object. Compare that with just calling from main ```wrapper(throwf)``` which the compiler can automatically deduce.
+
+If passing the type of ```throwf``` to the template looks complicated you can use ```decltype```, i.e.
+```std::thread t(wrapper<decltype(throwf)>,throwf)```
+# Function Objects and Lambdas
 
 In addition to functions, threads can be passed function objects or lambdas as parameters. For example
 
@@ -112,7 +199,7 @@ b.join();
 ```
 You can try this simple example [here](https://godbolt.org/z/b3TcYe). Note that when using gcc we need to pass the pthread switch.
 
-## Passing parameters
+# Passing parameters
 
 Passing arguments to the function is done by passing extra arguments to the thread constructor.
 For example,
@@ -196,7 +283,7 @@ int main(){
 }
 ```
 
-## Transferring thread ownership
+# Transferring thread ownership
 
 Sometimes we need to transfer ownership of thread. For example, we we need to store threads in containers. But thread objects are __not copyable__. Only one thread object can be associated with a thread of execution at any given time. In these cases we must use __move semantics__.
 Here an example to illustrate the problem.
