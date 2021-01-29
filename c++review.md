@@ -214,6 +214,32 @@ void doit(std::string&& s){
     
 }
 ```
+
+# Move semantics
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main(){
+std::string s{"hello there"};
+std::string ts=std::move(s);
+std::cout<<"the string s is "<<s<<"\n";
+std::cout<<"the string ts is "<<ts<<"\n";
+std::vector<int> v{1,2,3,4};
+std::cout<<"values of v before move are ";
+for(auto& x:v)std::cout<<x<<",";
+std::vector<int> tv=std::move(v);
+std::cout<<"\nafter move they are ";
+for(auto& x:v)std::cout<<x<<",";
+std::cout<<"\nand the values of tv are ";
+for(auto& x:tv)std::cout<<x<<",";
+std::cout<<std::endl;
+
+}
+```
+you can try it [here](https://godbolt.org/z/79a6zY)
 # Return values
 unless the compiler performs return value optimization (rvo) the following occurs
 (in g++ or clang++ specify -fno-elide-constructors to skip optimization)
