@@ -86,7 +86,43 @@ int main()
 As you can see we use ```detach()``` instead of ```join()```. Therefore the calling thread (in this case main) does not wait for the thread ```t```. But when the main thread exists all other threads are destroyed. Therefore the created thread might not have enough time to perform its job. You can see these two cases by defining and undefining  __WAIT__ in the code.
 
 # In class exercise 0
+Write two function, each running in its own thead. The first ```read_input``` keeps reading input from ```std::cin``` until the user types "quit". The second one,```read_file``` reads the content of (a one line) file. To simulate a time consuming I/O operations the ```read_file``` function should sleep for 10 seconds.
+Create a text file in the same directory as your VC++ solution, call it "input.txt" and write a one liner in it.
+```cpp
 
+#include <iostream>
+#include <fstream>
+#include <thread>
+#include <chrono>
+void read_input() {
+    std::string s;
+    std::cout << "enter a string. Type 'quit' to quit\n";
+    while (s != "quit") {
+        std::cin >> s;
+        std::cout << "user input= " << s << "\n";
+
+    }
+}
+void read_file(std::string name) {
+    std::ifstream file;
+    std::string content;
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+    file.open(name);
+    std::getline(file, content);
+    std::cout << "content of file =" << content << "\n";
+    file.close();
+}
+int main()
+{
+    std::thread t(read_file,"input.txt");
+    std::thread t2(read_input);
+    t.join();
+    t2.join();
+    std::cout << "main thread done\n";
+}
+
+
+```
 # Handling exceptions
 We close this section by considering the case when an __exception__ is thrown before a thread is joined. Consider the following code
 
