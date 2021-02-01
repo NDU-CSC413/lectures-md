@@ -691,4 +691,5 @@ As we can see from the above example built-in types are __not__ initiaized: some
 struct Test {
     Test(int x,int i):_x(x),_i(i){}
 }
+
 ```
