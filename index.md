@@ -1,7 +1,3 @@
----
-Title: CSC 413 Parallel and Distributed Computing. Spring 2021.
-Author: Hikmat Farhat
----
 ## CSC413 Parallel and Distributed Computing
 
 This site contains the annotated code for the course. Use this as a reference along with the github repo or the actual code.
