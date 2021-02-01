@@ -1,9 +1,10 @@
-# Multithreading 
+---
+title: CSC413 Parallel and Distributed Computing.
+author: Hikmat Farhat
+---
 
-
-
-# Multithreading in  C++
-Starting with the C++11 standard, C++ provides support for writing _portable_ multitheaded applications without relying on additional libraries and extensions. The basic functions and classes for thread support are declared in the ```<thread>``` header [reference](https://en.cppreference.com/w/cpp/thread/thread).
+# Multithreading in  C++. Part 1.
+Starting with the C++11 standard, C++ provides support for writing _portable_ multitheaded applications without relying on additional libraries and extensions. The basic functions and classes for thread support are declared in the ```<thread>``` header. Check the definition  [here](https://en.cppreference.com/w/cpp/thread/thread).
 We introduce threads with the ubiquitous hello thread program.
 # Creating threads
 
@@ -586,12 +587,17 @@ we remove the last line that prints the value of ```result``` or not.
 
 The reason is that when we don't print (i.e. not use) the variable result the compiler removes it from the code. This can be seen below in the assembly output between the two calls to ```now()```.
 
-The last line __is included__.
-![asm1](figs/asm1.jpg)
+![Figure 1](figs/asm2.jpg)
 
-The last line __is not included__.
+![Figure 2](figs/asm1.jpg )
 
-![asm2](figs/asm2.jpg)
+Figure 1  shows the assembly output when the last line __is not included__. Note the absence of instructions between the two calls to ```now()```.
+
+
+Figure 2  shows the assembly output when the last line __is included__. Note the number of instructions between the two calls to ```now()```.
+
+
+
 
 # In class exercise 3
 

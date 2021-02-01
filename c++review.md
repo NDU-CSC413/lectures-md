@@ -7,10 +7,11 @@ title: C++ Review
 When we define (declare) a variable the system reserves space in memory to store the
 value associated with that variable. This is the reason why we need to specify the 
 type of the variable since the required space depends on it. For example (typically), 
-an ```int``` and ```float``` need 4 bytes whereas ```long``` and ```double``` need 
+an ```int``` and ```float``` need 4 bytes whereas ```long long``` and ```double``` need 
 8 bytes. Because every variable is associated with a location in memory we can
-determine the memory address where the variable is located using the & operator. Note 
-that the & operator can have different meaning depending on context.
+determine the memory address where the variable is located using the ```&``` operator. Note 
+that the ```&``` operator can have different meaning depending on context.
+Example.
 ```cpp
 #include <iostream>
 int main(){
@@ -23,12 +24,13 @@ int z=x;
 z=17;
 y=13;
 //print the value of the variables and their respective addresses
-std::cout<<"x= "<<x<<" and <<"&x="<<&x<<std::endl;
-std::cout<<"x= "<<y<<" and <<"&x="<<&y<<std::endl;
-std::cout<<"x= "<<z<<" and <<"&x="<<&z<<std::endl;
+std::cout<<"x= "<<x<<" and &x="<<&x<<std::endl;
+std::cout<<"y= "<<y<<" and &y="<<&y<<std::endl;
+std::cout<<"z= "<<z<<" and &z="<<&z<<std::endl;
 
 }
 ```
+
 Note that ```int& y=x;``` declares _y_ as a reference to _x_ whereas ```&x``` gives the memory address of _x_. The different declarations used above carry to the parameters in function calls. For example,
 
 ```cpp
@@ -44,7 +46,7 @@ int main(){
   byValue(x);
   std::cout<<x<<std::endl;
   byRef(x);
-    std::cout<<x<<std::endl;
+  std::cout<<x<<std::endl;
 
 }
 ```
@@ -145,7 +147,7 @@ int main(){
 
 ## Constructors and destructors
 
-For builtin types like int and double a variable is "created" (memory is reserved) when the variable is declared. Once the variable is out of scope is it "destroyed" (memory is released. The same thing is done for objects instantiated from classes. This is done by using __constructor__ and __destructor__. When one don't supply our own versions a default version is used by the compiler which basically calls the constructors and destructors of the member variables.
+For builtin types like ```int``` and ```double``` a variable is "created" (memory is reserved) when the variable is declared. Once the variable is out of scope is it "destroyed" (memory is released). The same thing is done for objects instantiated from classes. This is done by using __constructor__ and __destructor__. When we don't supply our own versions a default version is used by the compiler which basically calls the constructors and destructors of the member variables.
 
 ```cpp
 class Test {
@@ -157,19 +159,58 @@ int main(){
     Test t;
     std::cout<<t._x<<std::endl;
     std::cout<<t._y<<std::endl;
-
-
 }
 ```
-No constructor is supplied so the compiler uses a default that creates variables _x and _y. The output is 
+No constructor is supplied so the compiler uses a default that creates variables _x and _y. 
+
+A constructor builds an object bottom up.
+1. the constructor of the base class (if any) is called
+1. members instructors are called
+1. Finally the constructor body is executed.
+
+For the _destructor_ the __opposite__ happens.
+For example
+
 ```cpp
-0
+struct Item {
+    Item(){std::cout<<"Item ctor\n";}
+    Item(int i){std::cout<<"Item ctor with input\n";}
+};
+struct Test {
+    Item _i;
+    int x;
+};
+void noinit(){
+    int x=12,y=77,z=99;
+    Test t;
+    std::cout<<t.x<<std::endl;
+}
+void init(){
+    int x=12,y=77,z=99;
+    Test t {};//initialize to zero
+    std::cout<<t.x<<std::endl;
+}
+int main(){
+    noinit();
+    init();
+}
+```
+Run to get the output
+```cpp
+item ctor
+723520304
+item ctor
 0
 ```
-
-# Rvalue reference
+As we can see from the above example built-in types are __not__ initiaized: some times they are zero sometimes they are not, it depends on the compiler. For class types the default constructor is called. We can control the constructor and the initialization of members as follows
+```cpp
+struct Test {
+    Test(int x,int i):_x(x),_i(i){}
+}
+```
+# Rvalue reference and move semantics
 Since C++11 there is a new type of references called **rvalue** references.
-The variable _res_ above extends the lifetime of the temporary object created by the ByT() function.  To see that consider when the destructor is called in the following code
+The variable _res_ below extends the lifetime of the temporary object created by the ```RT()``` function.  To see that consider when the destructor is called in the following code
 
 ```cpp
 #include <iostream>
@@ -194,7 +235,7 @@ std::cout<<" done\n";
 You can run the above code [here](https://godbolt.org/z/4EacM3)
 
 
-Note that  when when an rvalue reference  is used, it is used as a lvalue reference. This is called **move semantics is not passed through** .For the example the following recursive function gives an error
+__Note__ that  when an rvalue reference  is used, it is used as a lvalue reference. This is called **move semantics is not passed through** . For the example the following recursive function gives an error
 
 ```cpp
 void doit(std::string&& s){
@@ -214,8 +255,7 @@ void doit(std::string&& s){
     
 }
 ```
-
-# Move semantics
+Move semantics allows us to transfer ownership of resources.
 
 ```cpp
 #include <iostream>
@@ -240,6 +280,7 @@ std::cout<<std::endl;
 }
 ```
 you can try it [here](https://godbolt.org/z/79a6zY)
+
 # Return values
 unless the compiler performs return value optimization (rvo) the following occurs
 (in g++ or clang++ specify -fno-elide-constructors to skip optimization)
@@ -262,6 +303,8 @@ Test retTest(){
 }
 int main(){
   Test t=retTest();
+  std::cout<<"temporary returned by refTest is destroyed\n";
+  std::cout<<"end of main t will be destroyed\n";
 }
 ```
 what happens is the following
@@ -272,7 +315,7 @@ what happens is the following
 1. tmp is destroyed
 1. when main exists t is destroyed
 
-You can test the code below [here](https://godbolt.org/z/9Y4ojx). **Note** the -fno-elide-constructors option in the bottom right of the screen.
+You can test the code below [here](https://godbolt.org/z/sYa9KG). **Note** the -fno-elide-constructors option in the bottom right of the screen.
 ```
 $g++-10 -fno-elide-constructors -std=c++11 rvopt.cpp
 $./a.out
@@ -281,16 +324,20 @@ copy ctor
 dtor
 copy ctor
 dtor
+temporary returned by refTest is destroyed
+end of main t will be destroyed
 dtor
-
 ```
-If we remove the -fno-elide-constructors you get this output. Try it [here](https://godbolt.org/z/73bPvr)
+If we remove the -fno-elide-constructors you get this output. Try it [here](https://godbolt.org/z/r8nhYE)
 ```
 $g++-10 -std=c++20 rvopt.cpp
 $./a.out
 ctor
+temporary returned by refTest is destoryed
+end of main t will be destroyed
 dtor
 ```
+__Note__: since c++17 this is no longer possible. Try it [here](https://godbolt.org/z/9687h6)
 
 # Pointers
 A pointer variable is a variable that holds an address. We say variable _p_ points to variable _x_ if _p_ holds the address of _x_: ```int *p=&x;```.
@@ -644,51 +691,3 @@ The brackets "[]" introduces the lambda expression, sometimes called the capture
 Note the __capture__ of the variable _val_. We could have used "[&val]" to capture it by reference. If we want to capture all the variables we use "[=]" and by reference "[&]".
 
 
-# Extra
-
-## Constructors...
-
-A constructor builds an object bottom up.
-1. the constructor of the base class (if any) is called
-1. members instructors are called
-1. Finally the constructor body is executed.
-
-For example
-
-```cpp
-struct Item {
-    Item(){std::cout<<"Item ctor\n";}
-    Item(int i){std::cout<<"Item ctor with input\n";}
-};
-struct Test {
-    Item _i;
-    int x;
-};
-void noinit(){
-    int x=12,y=77,z=99;
-    Test t;
-    std::cout<<t.x<<std::endl;
-}
-void init(){
-    int x=12,y=77,z=99;
-    Test t {};//initialize to zero
-    std::cout<<t.x<<std::endl;
-}
-int main(){
-    noinit();
-    init();
-}
-```
-Run to get the output
-```cpp
-item ctor
-723520304
-item ctor
-0
-```
-As we can see from the above example built-in types are __not__ initiaized: some times they are zero sometimes they are not, it depends on the compiler. For class types the default constructor is called. We can control the constructor and the initialization of members as follows
-```cpp
-struct Test {
-    Test(int x,int i):_x(x),_i(i){}
-}
-```
