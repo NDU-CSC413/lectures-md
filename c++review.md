@@ -279,8 +279,62 @@ std::cout<<std::endl;
 
 }
 ```
-you can try it [here](https://godbolt.org/z/79a6zY)
+you can try it [here](https://godbolt.org/z/79a6zY). We illustrate further with our own, very simple, container.
+```cpp
+#include <iostream>
+struct Container {
+    int* p = nullptr;
+    int _size;
+    Container(int size) :_size(size), p(new int[size] {}) {}
+    Container(const Container& rhs) {//copy constructor
+        if (&rhs != this) {
+            _size = rhs._size;
+            p = new int[_size];
+            for (int i = 0; i < _size; ++i)
+                p[i] = rhs.p[i];
+        }
+    }
+    //usually there is also an assignment operator
+    Container(Container&& rhs) {
+        p = rhs.p;
+        rhs.p = nullptr;
+        rhs._size = 0;
+    }
+    Container& operator=(Container&& rhs) {
+        if (p)delete[] p;
+        p = rhs.p;
+        _size = rhs._size;
+        rhs._size = 0;
+        rhs.p = nullptr;
+        return *this;
+    }
+    void print() {
+        for (int i = 0; i < _size; ++i)
+            std::cout << p[i] << ",";
+        std::cout << "\n";
+    }
+    ~Container() {
+        if (p)delete[] p;
+    }
+};
 
+int main()
+{    
+    Container c(10);
+    std::cout<<"Content of c \n";
+    c.print();
+    Container d(std::move(c));
+    std::cout<<"Content of c \n";
+    c.print();
+
+    Container e(3);
+    d = std::move(e);
+    std::cout<<"Content of d \n";
+    d.print();
+}
+```
+
+You can try it [here](https://godbolt.org/z/1Gnvhb)
 # Return values
 unless the compiler performs return value optimization (rvo) the following occurs
 (in g++ or clang++ specify -fno-elide-constructors to skip optimization)
@@ -444,140 +498,163 @@ https://godbolt.org/z/orqKPq
 
 ## Smart pointers
 
-While pointers provide flexibility they can cause a variety of problems. One of the problems is shared ownership of a resource. As discussed before, in many situations a pointer variable contains the address of a dynamically allocated memory. We also saw that, in order not to have memory leaks, we need to free the allocated memory when done. This particular problem occurs when two or more pointer variables have the address of the same dynamically allocated resource. In such a situation we either try to free the memory multiple times or access a resource that no longer exists.
+While pointers provide flexibility they can cause a variety of problems. One of the problems is shared ownership of a resource. As discussed before, in many situations a pointer variable contains the address of a dynamically allocated memory. We also saw that, in order not to have memory leaks, we need to free the allocated memory when done. This particular problem occurs when two or more pointer variables have the address of the same dynamically allocated resource. In such a situation we either try to free the memory multiple times, access a resource that no longer exists , or forget to release the memory which causes memory leaks.
 We illustrate with the following simple example.
 
 ```cpp
 #include <iostream>
-struct Test {
-    int* resource = nullptr;
-    Test() {
-        resource=new int(10);
-        std::cout << "ctor: allocate\n";
-    }
-    ~Test() {
-        if (resource) {
-            delete resource;
-            std::cout << "deallocate\n";
-        }
-        std::cout << "dtor\n";
+#include <memory>
+#include <thread>
+#include <chrono>
+using Long = unsigned long long;
+
+void* memory_block(size_t size) {
+	return operator new(size);
+}
+void release_memory(void* p) {
+	operator delete(p);
+}
+
+struct Leaker {
+	int* _values=nullptr;
+	int _size;
+	Leaker(Long size) :_size(size) {
+		_values = (int*)memory_block(_size * sizeof(int));
+	}
+	int* values() {
+		return _values;
+	}
+    ~Leaker(){//Do we free memory here ?
     }
 };
-int *alloc(){
-    return new int(33);
-}
-int * mod (int *p){
-    *p = 14;
-    return p;
-}
-
 int main() {
-    Test* p = new Test();
-    int *r=alloc();
-    int* t = mod(p->resource);
-    //free memory pointed to by r
-    delete r;
-    //free memory pointed to by p (including resource)
-    delete p;
-
-    //if we free memory pointed to by t
-    // which doesn't exit the program will crash
-    
-
-    std::cout << *t << std::endl;
-    //also if we try to access it we get garbage
-    delete t;
-    std::cout << "done\n";
+	const unsigned long long n = 1 << 20;
+	for (int i = 0; i < 50; ++i) {
+		Leaker x(n);
+		int* p = x.values();
+    }
+    /* keep the program running long enough */
+	int y;
+	std::cout << "type anything\n";
+	std::cin >> y;
 }
-
 ```
+In the above code, the class ```Leaker``` allocates 1MB of memory. It has a choice, either it __does not free__ the allocated memory, as we did in the example above, or frees it in the destructor with the danger that ```p``` will also free it. Using the performance profiler in VS (Debug->Performance profiler) we see that the above code uses about 200MB
+which makes sense since each iteration allocates 4MB.
+
+![Figure 1](figs/large_memory.png)
+
+The other choice is to modify the destructor as follows
+```cpp
+~Leaker(){
+    if(_values!=nullptr)delete _values;
+}
+```
+This works provided the user (i.e. the code calling ```int p*=x.value()```) does not execute ```delete p;``` which crashes the program. You can try that scenario [here](https://godbolt.org/z/WT7rjx)
+
 
 To avoid problems like these we use either std::unique_ptr<T> or std::shared_ptr<T>. The first enforces __exclusive__
 ownership whereas the second allows __shared__ ownership. We start with an example of the second.
 
-```
-#include <iostream>
-#include <memory>
+```cpp
+	#include <iostream>
+	#include <memory>
+	#include <thread>
+	#include <chrono>
+    using Long = unsigned long long;
 
-struct Test {
-   
-    std::shared_ptr<int> res;
-
-    Test() {
-    
-        res = std::make_shared<int>(10);
-        std::cout << "ctor: allocate\n";
-    }
-    ~Test() {
-        std::cout << "dtor\n";
+void* memory_block(size_t size) {
+	return operator new(size);
+}
+void release_memory(void* p) {
+	operator delete(p);
+}
+struct Shared_Owner {
+	std::shared_ptr<int> _values;
+	Long _size;
+	Shared_Owner(Long size) :_size(size) {
+		/* in three steps for clarity */
+		void* raw = memory_block(_size * sizeof(int));
+		std::shared_ptr<int> q((int*)raw);
+		_values = q;
+		/*q will be destroyed here. It is ok
+		* it holds no resource since it was
+		* transfered to p
+		*/
+	}
+	std::shared_ptr<int> values() {
+		return _values;
+	}
+    long count(){
+        return _values.use_count();
     }
 };
+int main(){
+    const unsigned long long n = 1 << 20;
+    Shared_Owner x(n);
 
-std::shared_ptr<int> mod(std::shared_ptr<int> p){
-    *p = 14;
-    return p;
+	{
+		std::shared_ptr<int> p = x.values();
+        std::cout<<"after p is created="<<x.count()<<"\n";
+        std::shared_ptr<int> q=x.values();
+        std::cout<<"after q is created="<<x.count()<<"\n";
+    }
+    std::cout<<"count outside block= "<<x.count()<<"\n";
 }
-int* alloc() {
-    return new int(33);
-}
-
-int main() {
-    Test* p = new Test();
-    int* r = alloc();
-
-    std::shared_ptr<int> t = mod1(p->res);
-    delete p;
-    delete r;
-    std::cout << *t << std::endl;
-    std::cout << "done\n";
-}
-
 ```
-First, there is no __delete__ of a shared_ptr because it is automatically destroyed (i.e. dtor is called) when it goes out of scope __and__ it frees the resource it is pointing to __only if__ it is the __last__ shared_ptr copy.  Second, its used is exactly like pointers.
-In the example above there are two ```std::shared_ptr``` both pointing to the resource allocated by the Test object, namely _p_ indirectly and _t_ directly. The statement ```delete p;``` calls ```~Test()``` which automatically calls the dtors of all members, including _resource_. Since resource is a shared_ptr it knows that it is not the last object pointing to the allocated memory so it does not free it, just decrements the number of copies.
+First, there is no __delete__ of a ```std::shared_ptr``` because it is automatically destroyed (i.e. dtor is called) when it goes out of scope __and__ it frees the resource it is pointing to __only if__ it is the __last__ shared_ptr copy.  Second, it is used exactly like pointers.
+In the example above there are three ```std::shared_ptr```, all pointing to the resource allocated by the ```Shared_Owner``` object _x_. Inside the block two ```std::shared_ptr``` objects are created _p_ and _q_, both pointing to the memory block allocated by _x_. When they go out of scope, and therefore they are destroyed,  the allocated memory is not freed, the number of copies is just decremented.
+Now when _x_ goes out of scope, it is the last shared_ptr pointing to the resource and therefore it frees it.
+You can try the above example here [here](https://godbolt.org/z/c9159K).
 
-Now when _t_ goes out of scope, it is the last shared_ptr pointing to the resource and therefore it frees it.
-You can try both versions [here](https://godbolt.org/z/eMqTMh)
 
-The ```std::unique_ptr<T>``` is similar except it enforces __exclusive__ ownership. Below is the same example using
-```std::unique_ptr<T>```. Note the two changes due to noncopiable nature of ```std::unique_ptr```. First, in function ```mod``` the ```std::unique_ptr``` must be passed and returned by reference because we cannot make a copy. Also
+The ```std::unique_ptr<T>``` is similar except it enforces __exclusive__ ownership. Below is a similar  example illustrating the memory automatically released by the ```std::unique_ptr``` when it is destroyed. Note the two changes due to noncopiable nature of ```std::unique_ptr```. First, in function ```mod``` the ```std::unique_ptr``` must be passed and returned by reference because we cannot make a copy. Also
 in the statement ```    std::unique_ptr<int> t = std::move(mod(p->res));``` the resource held by _p_ is transferred to _t_.
 ```cpp
 #include <iostream>
 #include <memory>
-struct Test {
-    std::unique_ptr<int> res;
-    Test() {
-        res = std::make_unique<int>(10);
-        std::cout << "ctor: allocate\n";
-    }
-    ~Test() {
-        std::cout << "dtor\n";
-    }
-};
-//Note the return as reference since
-// a std::unique_ptr cannot be copied
-std::unique_ptr<int>& mod(std::unique_ptr<int> & p) {
-    * p = 14;
-    return p;
-}
-int* alloc() {
-    return new int(33);
-}
-int main() {
-    Test* p = new Test();
-    int* r = alloc();
-//transfer of ownership using std::move because
-// std::unique_ptr cannot be copied
-    std::unique_ptr<int> t = std::move(mod(p->res));
+#include <thread>
+#include <chrono>
+using Long = unsigned long long;
 
-    delete p;
-    delete r;
-    std::cout << *t << std::endl;
-    std::cout << "done\n";
+void* memory_block(size_t size) {
+	return operator new(size);
+}
+void release_memory(void* p) {
+	operator delete(p);
+}
+
+struct Unique_Owner {
+	std::unique_ptr<int> _values;
+	Long _size;
+	Unique_Owner(Long size) :_size(size) {
+		/* in three steps for clarity */
+		void* raw = memory_block(_size * sizeof(int));
+		std::unique_ptr<int> q ((int *)raw);
+		_values = std::move(q);
+		/*q will be destroyed here. It is ok 
+		* it holds no resource since it was
+		* transfered to p
+		*/
+	}
+	std::unique_ptr<int> values() {
+		return std::move(_values);
+	}
+};
+int main(){
+    const unsigned long long n = 1 << 20;
+	for (int i = 0; i < 50; ++i) {
+		Unique_Owner x(n);
+		std::unique_ptr<int> p = x.values();
+		std::this_thread::sleep_for(std::chrono::microseconds(10));
+    }
 }
 ```
-You can try the code [here](https://godbolt.org/z/7c6KT6)
+Using the performance profiler in VS (Debug->Performance profiler) we see that the above code uses only 4MB
+which means each iteration  4MB are allocated and then freed.
+
+![Figure 1](figs/small_memory.png)
+
 # Templates
 
 On many occasions we write multiple versions of the same code to handle different types. For example suppose we want to write a function to add two numbers (using the + operator) we write
