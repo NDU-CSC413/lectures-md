@@ -1,6 +1,4 @@
----
-title: C++ Review 
----
+
 # C++ Review
 Below are the list of topics we will be covering in this review. This document serves as a reference. All the code here are can be imported into MSVC as a single solution from this [repository](https://github.com/NDU-CSC413/c-review).
 
