@@ -473,7 +473,29 @@ int main(){
     delete p;//release the reserved memory;
 }
 ```
-The **new** operator can be used with any object.
+The __new__ operator can be used with any object. In particular, we can use it to create an array dynamically
+```cpp
+int main(){
+    const int n=8;
+    int* p=new int[n];//Note the difference from int(n)
+    /* fill the array with values */
+    /* p IS a variable so we make
+     * copy before changing it
+     */
+    for(int i=0,*q=p;i<n;++i,++q)
+         *q=i;
+     /* we use it as an array
+      * good thing we kept the
+      * original p
+      */
+    for(int i=0;i<n;++i)
+      std::cout<<p[i]<<",";
+    std::cout<<"\n";
+
+}
+
+```
+As we mentioned before we can use a pointer to any type.
 
 ```cpp
 #include <iostream>
