@@ -1,7 +1,16 @@
 ---
 title: C++ Review 
 ---
+# C++ Review
+Below are the list of topics we will be covering in this review. This document serves as a reference. All the code here are can be imported into MSVC as a single solution from this [repository](https://github.com/NDU-CSC413/c-review).
 
+1. [Variables and References](#variables-and-references)
+2. [Classes](#classes)
+3. [Move semantics](#rvalue-reference-and-move-semantics)
+4. [Return values](#return-values)
+5. [Pointers](#pointers)
+6. [Templates](#templates)
+7. [STL](#algorithms-in-stl)
 # Variables and references
 
 When we define (declare) a variable the system reserves space in memory to store the
@@ -85,6 +94,30 @@ int main(){
 ```
 
 You can run the above code [here](https://godbolt.org/z/e8v8cx).
+
+One important property of references is that they __cannot be reassigned__.
+```cpp
+#include <iostream>
+int main(){
+int x=19,y=23;
+
+//int &xr;//error a reference must be initialized
+int& xr=x;
+int& yr=y;
+/* this does NOT reassign xr to reference y
+* it merely assigns the value of y to xr and thus to x
+*/
+xr=yr;
+std::cout<<"value of x="<<x<<"\n";
+xr=45;
+std::cout<<"value of x="<<x<<"\n";
+std::cout<<"value of y="<<y<<"\n";
+}
+```
+You can try it [here](https://godbolt.org/z/dzqe7e)
+
+We can prevent modification to a variable we reference to. For example in the above if we declare ```const int& xr=x;``` it means that ```x``` cannot be modified using ```xr``` (it can still be modified). In this case  the line ```xr=yr;``` will generate an error. Note that in some text they write ```int const& xr=x;``` which is equivalent but i prefer the first syntax which conveys the fact that the ```int``` is unmodifiable not the reference, since by definition a reference is unmodifiable.
+As we will see later a class containing a member of type reference cannot be assigned (assignment operator is deleted)
 
 # Classes
 
@@ -208,6 +241,31 @@ struct Test {
     Test(int x,int i):_x(x),_i(i){}
 }
 ```
+
+As mentioned before classes containing references or constants have their assignment operator automatically deleted 
+```cpp
+#include <iostream>
+struct TestRef {
+    int& _x;
+    TestRef(int& x) :_x(x) {}
+};
+struct TestConst {
+    const int _x;
+    TestConst(int x) :_x(x) {}
+};
+int main()
+{
+    int x = 12;
+    TestRef t(x);
+    TestRef p(x);
+    TestConst c(x);
+    TestConst d(x);
+    p = t;//error assignment operator deleted
+    c = d;//error assignment operator deleted
+}
+```
+You can see the errors [here](https://godbolt.org/z/GY564h)
+
 # Rvalue reference and move semantics
 Since C++11 there is a new type of references called **rvalue** references.
 The variable _res_ below extends the lifetime of the temporary object created by the ```RT()``` function.  To see that consider when the destructor is called in the following code
@@ -694,9 +752,8 @@ In the above example the compiler automatically deduces the type which sometimes
 
 ```cpp
 add<int>(x,y);
-add<double(u,v);
+add<double>(u,v);
 add<std::string>(s,k);
-
 ```
 
 Note that the template is instantiated __as needed__ at compile time. Also, we can pass parameters to the template other than types. For example
@@ -707,12 +764,89 @@ void doit(){
     int a[n];
 }
 ```
+## Template specialization
+ The ```add``` example above doesn't make any sense if used with ```char```. Try adding the two characters 'a' and 'b'. Therefore we would like to change the definition of ```add``` when the parameter type is ```char```. This is done using __template specialization__. One reasonable "addition" of characters would be to obtain a character a the same distance from the last one. For example, the distance (in ASCII code) between 'a' abd 'b' is 1 so the result of ```add('a','b')```
+ would be 'c' since ```b+1=c```. Below is the syntax for __template specialization__.
+ ```cpp
+ template<typename T>
+T add(T x,T y){
+    return x+y;
+}
+ template<>
+ char add<char>(char a,char b){
+   return a<b?b+(b-a):a+(a-b);
+ }
+ ```
 
-# Algorithms in STL
-The standard template library STL defines a set of general purpose algorithms. You are almost always advised to use those instead of writing your own. Furthermore, since C++17, most of them can take advantage of parallelisation. In this section we look at a few examples. Most of these algorithms need the <algorithm> or <numeric> header and they are defined over a range [start Iterator, end Iterator).
+ Note that the specialization starts with ```template<>``` and every occurence of ```T``` was replaced by ```char```.
+ Even though the second implementation of ```add``` for ```char``` makes more sense that the first it is not satisfactory.
+ What we would like is for the result of ```add('a','b')``` to give "ab". This means that the signature would become
+ ```std::string add(char,char )```. We could be tempted to specialize it as follows
+ ```cpp
+ template<>
+ std::string add<char>(char a,char b){
+     return std::string(1,a)+std::string(1,b);
+ }
+ ```
+ But that is __NOT__ a specialization. Notice that in the "general" version the return value is the same type as the input parameters wich is not the case for our specialization. The compiler will give an error. You can check it [here](https://godbolt.org/z/GKG57W).
 
-1. std::count and std::count_if ([signature](https://en.cppreference.com/w/cpp/algorithm/count))
+ We can accomplish our aim by using ```auto``` as the return value, this way both versions will have the same signature.
+ ```cpp
+template<typename T>
+auto add(T a,T b){
+    return a+b;
+}
+template<>
+auto add<char>(char a,char b){
+    //return std::string({a,b})//different way
+    return std::string(1,a)+std::string(1,b);
+}
+ ```
+ You can try it [here](https://godbolt.org/z/569Yfn)
+
+ # Algorithms in STL
+The standard template library STL defines a set of general purpose containers and algorithms. You are almost always advised to use those instead of writing your own. Furthermore, since C++17, most of the algorithms can take advantage of parallelisation. In this section we look at a few examples. Most of these algorithms need the <algorithm> or <numeric> header and they are defined over a range [start Iterator, end Iterator).
+
+## STL containers and iterators
+Iterators are generalization of pointers and present a common interface to all STL containers and algorithms. For an array a pointer is sufficient since the elements of an array form a __contiguous__ location in memory. What if the elements are not stored contiguously? Since every container stores the elements differently, it implements its own methods to _iterate_ over its elements. This has the added value that the user does not need to know the internal workings of the container in order to be able to use it.
+ Given a container ```c``` an iterator ```itr``` points at an element stored in ```c```. Therefore dereferencing an iterator ```*itr``` will return the element itself. Also iterators can be incremented and decremented like pointers: ```itr++``` and ```itr--```. Furthermore, every container ```c``` has a ```begin``` and ```end()``` method. 
+
+```cpp
+#include <vector>
+#include <iostream>
+int main(){
+  std::vector<std::string> sv;
+  sv.push_back("one");
+  sv.push_back("two");
+  for(auto itr=sv.begin();itr!=sv.end();itr++){
+      std::cout<<(*itr)<<std::endl;
+  }
+}  
 ```
+
+The auto keyword is useful since otherwise we have to write down the long type of the iterator: (since it is an iterator to container of type ```std::vector<std::string>```)
+
+```cpp
+std::vector<std::string>::iterator itr;
+```
+
+vectors can be used similarly to arrays.
+
+```cpp
+std::vector<int> iv;
+iv.push_back(1);
+iv.push_back(2);
+for(int i=0;i<iv.size();i++)
+  iv[i]=i;
+```
+
+Since vectors are required by the c++ standard to use contiguous memory it is best to add and remove(as opposed to change) from the end of a vector. While we will deal mostly with ```std::vector``` there are many other types of container in the STL. 
+## Algorithms
+In this section we explore a few algorithms provided by the STL.
+
+1. ```std::count``` and ```std::count_if``` ([signature](https://en.cppreference.com/w/cpp/algorithm/count))
+
+```cpp
 #include <iostream>
 #include <algorithm>
 #include <vector>
@@ -736,12 +870,81 @@ int main(){
 As you can see count_if takes a unary predicate as a third parameter and this can be  either a function pointer or a function object. Recall, a function object is one that defines an operator().
 [click here to run](https://godbolt.org/z/nY35hr)
 
+1. ```std::find``` and ```std::find_if``` [reference](https://en.cppreference.com/w/cpp/algorithm/find). Find the __first__ occurrence of an object in a container and returns an iterator pointing to it.
 
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+int main(){
+  std::vector<int> v {3,7,9,1,1,8,19,2,1,4};
+  auto first=std::find(v.begin(),v.end(),1);
+  /* print all the elements from first
+  * occurrence of the value 1 to the end 
+  */
+  for(auto itr=first;itr!=v.end();++itr)
+    std::cout<<*itr<<",";
+  std::cout<<"\n";
+  first=std::find_if(v.begin(),v.end(),
+            [](int x){return x%2==0;});
+  /* all the elements from the first
+   * occurrence of an even number to 
+   * the end
+   */
+  for(auto itr=first;itr!=v.end();++itr)
+    std::cout<<*itr<<",";
+  std::cout<<"\n";
+}
+```
+You can try it [here](https://godbolt.org/z/75jKq7)
+
+
+1. ```std::remove```, ```std::remove_if``` and ```std::erase```
+
+The STL functions ```std::remove``` and ```std::remove_if``` do __not__ remove anything. They just partition the input range into a left part which contains the original objects, in the same order, where the desired object is removed, and a right part which contains "non useful" objects: either the one to be removed or additional copies of the already existing objects.
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main(){
+    std::vector<int> v {1,2,3,4,2,5,2,6};
+    auto new_end=std::remove(v.begin(),v.end(),2);
+    for(auto itr=v.begin();itr!=new_end;++itr)
+      std::cout<<*itr<<",";
+    std::cout<<"\n";
+    /* "non useful" part */
+    for(auto itr=new_end;itr!=v.end();++itr)
+     std::cout<<*itr<<",";
+    std::cout<<"\n";
+}
+```
+As you might have guessed ```std::remove_if``` works the same way but using a predicate instead of a value.
+These two functions are useful, especially, for the remove-erase idiom. Once we have the "useful" range with the desired object removed from it we can actually erase it.
+```cpp
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+int main(){
+    std::vector<int> v {1,2,3,4,2,5,2,6};
+    auto new_end=std::remove(v.begin(),v.end(),2);
+    v.erase(new_end,v.end());
+    /* the vector contains only 
+     * the "useful" part
+     */
+    for(auto x:v)
+     std::cout<<x<<",";
+    std::cout<<"\n";
+}
+```
+You can try it [here](https://godbolt.org/z/6h9M9T)
 ### Lambda expressions
 
 As we saw, many algorithms, especially in STL, take a __callable__ object as a parameter.  Lambda expression are a convenient way to define such a callable object. We rewrite the previous example using lambda expressions.
 
-```
+```cpp
 #include <iostream>
 #include <algorithm>
 #include <vector>
