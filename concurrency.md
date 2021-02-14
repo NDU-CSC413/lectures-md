@@ -273,7 +273,8 @@ int main(){
 ```
 You can try the above code [here](https://godbolt.org/z/oTaYxn).
 
-Internally, the thread constructor passes arguments to the callable object as an rvalue. Therefore if the callable object expects the argument to be a reference then use std::ref.
+Internally, the thread constructor passes arguments to the callable object as an __rvalue__. 
+ Therefore if the callable object expects the argument to be a reference then use ```std::ref```.
 
 The code below will not compile
 ```cpp
@@ -304,9 +305,26 @@ int main(){
     std::cout<<x<<std::endl;
 }
 ```
-Try it [here](https://godbolt.org/z/G138To)
+Try it [here](https://godbolt.org/z/63aWsb).
 
-A different way to passing parameters by reference would be to use a function object that stores a reference to the variable.
+The situation is similar to the following example:
+```cpp
+void func(int &x){
+
+}
+template<typename T,typename U>
+void g(T f,U&& x){
+    f(std::move(x));
+}
+int main(){
+    int x=17;
+    g(func,x);
+}
+```
+You can try it [here](https://godbolt.org/z/Mv9ddq).
+
+
+A different way of passing parameters by reference would be to use a function object that stores a reference to the variable.
 Example
 
 ```cpp
