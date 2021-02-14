@@ -2,7 +2,7 @@
   
   
 First note that if the data shared between threads is never modified then we don't have a problem at all. The problems start to occur when one or more threads modifies the shared data.
-<p align="center"><img src="https://latex.codecogs.com/gif.latex?&#x5C;sqrt(&#x5C;pi)"/></p>  
+<p align="center"><img src="https://latex.codecogs.com/png.latex?&#x5C;sqrt(&#x5C;pi)"/></p>  
   
   
 ##  Motivating Example
