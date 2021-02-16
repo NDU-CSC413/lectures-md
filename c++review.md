@@ -844,13 +844,13 @@ int main(){
 }  
 ```
 
-The auto keyword is useful since otherwise we have to write down the long type of the iterator: (since it is an iterator to container of type ```std::vector<std::string>```)
+The auto keyword is useful since otherwise we have to write down the long type of the iterator: (since it is an iterator to container of type ```std::vector<std::string>```).
 
 ```cpp
 std::vector<std::string>::iterator itr;
 ```
-
-vectors can be used similarly to arrays.
+vectors,unlike ```std::list```, are required to store their content at contiguous locations. Therefore they support
+random access to elements and thus define the index operator
 
 ```cpp
 std::vector<int> iv;
@@ -860,7 +860,7 @@ for(int i=0;i<iv.size();i++)
   iv[i]=i;
 ```
 
-Since vectors are required by the c++ standard to use contiguous memory it is best to add and remove(as opposed to change) from the end of a vector. While we will deal mostly with ```std::vector``` there are many other types of container in the STL. 
+Since vectors are required by the c++ standard to use contiguous memory it is best to add and remove(as opposed to change) from the end of a vector. While we will deal mostly with ```std::vector``` there are many other types of container/container adaptor  in the STL such as ```std::list```, ```std::stack```, ```std::map```,etc.
 ## Algorithms
 In this section we explore a few algorithms provided by the STL.
 
@@ -960,6 +960,54 @@ int main(){
 }
 ```
 You can try it [here](https://godbolt.org/z/6h9M9T)
+
+In many situation we need to print all the values in a container using a range-based for loop and auto.
+We can type a little less if we defined an operator ```<<``` that can handle containers.
+```cpp
+template<typename Ostream,typename Container>
+Ostream& operator<<(Ostream& os,Container& c) {
+	for (auto x : c)
+		os<< x << ",";
+	return os;
+}
+```
+The above works well with all sorts of containers, except with strings since will will print a string
+as characters separated by commas. We can fix this by using template specialization
+```cpp
+template <>
+std::ostream& operator<< <std::ostream, std::string>
+			(std::ostream& os, std::string& s) {
+	/* cannot use os<<s because we enter infinite recursion */
+	os.write(s.c_str(), s.size());
+	return os;
+}
+
+```
+## substrings and subranges
+
+The ```std::string``` class has a convenient member ```std::string::find``` which returns the position of
+the first character of the substring in the string if found, and ```std::string::npos``` otherwise. 
+A general "substring" finding method is ```std::search``` which will find a "subrange" in any container,
+including strings.
+```cpp
+#include <iostream>
+#include <string>
+int main(){
+    std::string s {"First Middle Last Middle"};
+    std::string sub {"Middle"};
+    auto pos=s.find(sub);
+    if(pos!=std::string::npos)std::cout<<"found at "<<pos<<"\n";
+    else std::cout<<"not found\n";
+    std::vector<int> v{4,2,7,3,1,5};
+    std::vector<int> needle {7,3,1};
+    /* returns an iterator to the beginning of the match
+    * or v.end() if no match is found
+    */
+    auto itr=std::search(v.begin(),v.end(),needle.begin(),needle.end());
+}
+
+```
+
 ### Lambda expressions
 
 As we saw, many algorithms, especially in STL, take a __callable__ object as a parameter.  Lambda expression are a convenient way to define such a callable object. We rewrite the previous example using lambda expressions.
@@ -989,5 +1037,7 @@ int main(){
 The brackets "[]" introduces the lambda expression, sometimes called the capture list. The "()" are the parameters passed to the expression, very similar to function arguments. Finally, between "{" and "}" is the body.
 
 Note the __capture__ of the variable _val_. We could have used "[&val]" to capture it by reference. If we want to capture all the variables we use "[=]" and by reference "[&]".
+
+##
 
 
