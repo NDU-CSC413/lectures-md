@@ -389,7 +389,6 @@ int main()
     d.print();
 }
 ```
-
 You can try it [here](https://godbolt.org/z/1Gnvhb)
 # Return values
 unless the compiler performs return value optimization (rvo) the following occurs
