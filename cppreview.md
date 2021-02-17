@@ -1,6 +1,7 @@
 
 # C++ Review
-Below are the list of topics we will be covering in this review. This document serves as a reference. All the code here are can be imported into MSVC as a single solution from this [repository](https://github.com/NDU-CSC413/c-review).
+Below are the list of topics  covered in this review. This document is __not__ by any stretch 
+a comprehensive reference of cpp, it covers some of the topics that we will be using in our course only. All the code here are can be imported into MSVC as a single solution from this [repository](https://github.com/NDU-CSC413/c-review).
 
 1. [Variables and References](#variables-and-references)
 2. [Classes](#classes)
