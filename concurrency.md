@@ -1,7 +1,3 @@
----
-title: CSC413 Parallel and Distributed Computing.
-author: Hikmat Farhat
----
 
 # Multithreading in  C++. Part 1.
 Starting with the C++11 standard, C++ provides support for writing _portable_ multitheaded applications without relying on additional libraries and extensions. The basic functions and classes for thread support are declared in the ```<thread>``` header. Check the definition  [here](https://en.cppreference.com/w/cpp/thread/thread).
@@ -739,3 +735,231 @@ int main()
 	
 }
 ```
+# Example: parallel accumulate
+
+In its simplest form, ```std::accumulate``` adds( accumulates) all the values in a given range,
+including a __supplied initial value__. The default operation is ```std::plus{}```, the first 
+call to ```std::accumulate``` below can be written as
+```std::accumulate(v.begin(),v.end(),0,std::plus{})```. We can supply any __binary__ operator,
+for example, in the second call below, we use ```std::multiplies```.
+__NOTE__: if you are using a pre c++17 compiler you might need to supply template parameter
+for ```std::multiplies{}```, e.g. ```std::multiplies<int>{}```.
+```cpp
+#include <iostream>
+#include <numeric>
+#include <functional>
+#include <vector>
+int main(){
+    std::vector<int> v{1,2,3,4};
+    std::cout<<
+      std::accumulate(v.begin(),v.end(),0)
+      <<"\n";
+       std::cout<<
+      std::accumulate(v.begin(),v.end(),1,std::multiplies{})
+      <<"\n";
+}
+```
+You can try it [here](https://godbolt.org/z/MosYY8).
+
+In general, ```std::accumulate``` works on a range of any type, as long as the supplied operation,
+is compatible with that type. While most of the time the operation passed to  ```std::accumulate```
+is associative, it is important to know that it performs a __left fold__ operation, which, if the binary operation
+is not associative gives a different result than a __right fold__. 
+For example, the midpoint operation below is __not__ associative. While the function ```foldr``` and ```foldl``` are
+recursive, ```std::accumulate``` is not. It works similarly to ```my_accumulate```.
+```cpp
+#include <iostream>
+#include <numeric>
+#include <vector>
+template<typename Iter, typename T, typename Func = std::plus<T> >
+T my_accumulate(Iter start, Iter end, T init, Func f = std::plus<T>{}) {
+    T result = init;
+    for (auto itr = start; itr != end; ++itr) {
+        result =result+*itr;
+    }
+    return result;
+}
+template<typename T, typename ...Ts>
+auto foldr(Ts... params) {
+    return (params + ... + T{});
+}
+template<typename T, typename ...Ts>
+auto foldl(Ts... params) {
+    return (T{} + ... + params);
+}
+struct mid {
+    int _x;
+    mid(int x=0) :_x(x) {}
+    mid operator+(const mid& rhs) {
+        return mid((_x + rhs._x) / 2);
+    }
+
+};
+int main() {
+    std::vector<int> u{ 1,2,3,4 };
+    std::accumulate(u.begin(), u.end(), 0, std::plus{});
+    mid a{ 1 }, b{ 2 }, c{ 3 };
+    mid rr = foldr<mid>(a, b, c);
+    mid lr = foldl<mid>(a, b, c);
+    std::cout << rr._x << "\n";
+    std::cout << lr._x << "\n";
+    std::vector<mid> v{ a,b,c };
+    auto ar = std::accumulate(v.begin(), v.end(),mid{});
+    std::cout<<my_accumulate(v.begin(), v.end(), mid{})._x<<"\n";
+    std::cout << ar._x << "\n";
+}
+
+```
+You can try the above code [here](https://godbolt.org/z/jq9eGj).
+## Parallel accumulate
+
+In this section we will modify the ```my_accumulate``` function to run its operations in parallel.
+The basic idea is to divide the range into _m_ subranges, where _m_ is the number of threads we will run.
+Each thread will accumulate the values in its own range, and when all the threads are done the main thread
+will __add__ the partial results. 
+
+Note that even though the ```parallel_acc``` function below applies
+an arbitrary function _f_ on the subranges, the final result is the _sum_ of those partial results.
+
+```cpp
+
+#include <iostream>
+#include <thread>
+#include <algorithm>
+#include <vector>
+#include <numeric>
+#include "../include/utility.h"
+using Long = unsigned long long;
+
+/* assume the vector size is a power of 2 */
+template <int NUMT=0,typename Iter,typename T,typename Func>
+T parallel_acc(Iter first, Iter last, T init,Func f) {
+	Long const length = std::distance(first, last);
+	
+	Long num_threads = NUMT==0?std::thread::hardware_concurrency():NUMT;
+	std::cout << "Number of threads = " << num_threads << "\n";
+	Long block_size = length / num_threads;
+	std::vector<T> results(num_threads ) ;
+	std::vector<std::thread> threads(num_threads );
+	Iter block_start, block_end;
+	for (Long i = 0; i < num_threads; ++i) {
+		block_start = first + i * block_size;
+		block_end = first+(i+1)*block_size;
+		threads[i] = std::thread(
+			[=](Iter s, Iter e, T& r) {
+				r = std::accumulate(s, e, 0.0,f);
+			},
+			block_start,block_end,std::ref(results[i])
+		);
+	}
+	
+	for (auto& t : threads)
+		t.join();
+	
+	return std::accumulate(results.begin(), results.end(), init);
+
+}
+int main()
+{
+	const int  n = 1<<25;
+	std::vector<double> v(n);
+	std::fill_n(v.begin(), n, 1.0);
+	Duration d;
+	double r;
+	TIMEIT(d
+		,r=parallel_acc<8>(v.begin(), v.end(), 0.0
+			, [](double acc, double val) {return acc += 1.0 / (1 + val * val); }
+		);
+	)
+	std::cout << "result= " << r << std::endl;
+	std::cout << "duration= " << d.count() << std::endl;
+	/* reference for std::accumulate
+	* https://tinyurl.com/yd9b4qz8
+	*/
+	TIMEIT(d
+		, r=std::accumulate(v.begin(), v.end(), 0.0
+			, [](double acc, double val) {return acc+=1.0 / (1 + val * val); }
+		);
+	)
+	std::cout << r << "\n";
+	std::cout << d.count() << "\n";
+}
+
+
+```
+# Example: Computing PI
+
+In this section we will compute the value of PI both sequentially and in parallel.
+We will be using the below formula:
+
+<img src="https://render.githubusercontent.com/render/math?math=\pi=\int_0^1\frac{dx}{1%2Bx^2}">
+
+The basic idea, as in the previous example, is to divide the interval [0,1] into subintervals and compute
+each subinterval in a different thread than combine the results.
+
+```cpp
+#include <iostream>
+#include <thread>
+#include <iomanip>
+#include <mutex>
+#include <vector>
+#include "../include/utility.h"
+
+void helper(double stepsize,int from,int to,double& res) {
+	double sum = 0, midpoint;
+	for (int i = from; i < to; ++i) {
+		midpoint = (i + 0.5) *stepsize;
+		sum += 1.0 / (1 + midpoint * midpoint);
+	}
+	std::lock_guard<std::mutex> g(m);
+	res += 4.0 *stepsize * sum;
+}
+template<int hard_t=2>
+void par_pi(int pow, double& pi) {
+	const int num_steps = 1 << pow;
+	const int block_size = num_steps / hard_t;
+	std::vector<std::thread> mythreads;
+	double results[hard_t];
+	double dx = 1.0 / (double)num_steps;
+	pi = 0;
+	for (int t = 0; t < hard_t;++t) {
+		mythreads.push_back(
+			std::thread(
+				helper, dx, t * block_size, (t + 1) * block_size
+				,std::ref(results[t])
+			)
+		);
+	}
+	
+	for (auto& t : mythreads)t.join();
+
+	pi = 0;
+	for (int i = 0; i < hard_t; ++i)
+		pi += results[i];
+
+
+}
+
+	
+void seq_pi(int pow,double& pi) {
+	const int num_steps = 1 << pow;
+	helper(1.0 / num_steps, 0, num_steps, pi);
+}
+
+int main(){
+	
+	double pi = 0;
+	Duration d;
+	TIMEIT(d
+		, par_pi<8>(28, pi);
+	)
+	std::cout <<std::setprecision(20) << pi << "\n";
+	std::cout << d.count() << "\n";
+
+}
+
+
+
+```
+
+
